@@ -1,44 +1,50 @@
-# Vid.ai
+# Nova Reach — lean RankAI-style marketing chat agent
 
-Turn any idea or rough script into a ready-to-post short-form video. Type an idea,
-Claude writes a scene-by-scene script (hook, voiceover lines, on-screen captions),
-and the app assembles it into a downloadable vertical (or square/landscape) MP4 -
-voiceover, background visuals, and burned-in captions included.
+Nova Reach is a self-hostable SaaS MVP: upload your knowledge base, get a chat
+agent that answers questions grounded in that content, embed it on your site
+as a widget, and charge for it with Stripe. Built with Next.js (App Router),
+Prisma + SQLite, NextAuth, and the OpenAI API.
 
-This is a lean, weekend-shippable MVP: Next.js + Tailwind + SQLite, email/password
-auth, and a Stripe (test mode) paid tier - built to run locally today and deploy
-this week.
+## What's included
 
-## The core loop
+- **Chat UI with streaming responses** (`/chat`) wired to an LLM via the
+  OpenAI API, with a **globally editable system prompt** (admin-only,
+  `/admin`).
+- **Knowledge base / RAG** (`/dashboard`): upload `.txt`/`.md`/`.csv` files or
+  paste a URL. Content is chunked, embedded (`text-embedding-3-small` by
+  default), and the top-matching chunks are injected into the system prompt
+  for every chat and widget reply.
+- **Multi-conversation history** — every user's conversations are saved and
+  browsable in the sidebar; **saved prompts** let you store and reuse
+  frequently-used messages.
+- **Shareable / embeddable widget** — a per-user `widgetKey` powers a
+  standalone chat page (`/widget/:key`) and a drop-in `<script>` snippet
+  (`public/widget.js`) that adds a floating chat bubble to any site.
+- **Usage limits per plan** (Free vs Pro, enforced server-side per day) and
+  an **admin dashboard** (`/admin`) listing every user and their recent
+  conversations.
+- **Email/password auth** (NextAuth credentials provider) and a **Stripe
+  test-mode checkout** for the Pro plan, with a webhook that upgrades/downgrades
+  the account automatically.
+- A clean, responsive landing page (`/`) and pricing page (`/pricing`).
 
-1. **Drop in an idea** - a one-liner or a full rough script.
-2. **AI writes the scenes** - Claude (`claude-opus-5`) breaks it into 5-8 scenes,
-   each with a voiceover line, an on-screen caption, and a visual mood.
-3. **Render** - each scene becomes a gradient-background clip with burned-in
-   captions and (optionally) an AI voiceover, timed automatically, then
-   concatenated into one finished video via `ffmpeg`.
-4. **Dashboard** - every idea, script, and render is saved, searchable, and
-   filterable by status (draft / scripted / rendering / ready / failed).
+## Why this isn't a fork of AionUi
 
-## Stack
+[AionUi](https://github.com/iOfficeAI/AionUi) is an Electron desktop app for
+running coding agents locally — a different runtime shape (desktop, not
+multi-tenant web) from what's needed here (a hosted SaaS with per-user
+knowledge bases, auth, billing, and an embeddable widget). Rather than force
+a desktop app into that shape, this MVP is a fresh, lean Next.js
+implementation that covers the same functional surface RankAI's public
+description advertises: chat over your own content, deployed for visitors,
+with plans and admin visibility.
 
-- **Next.js 16** (App Router) + **Tailwind CSS 4**
-- **SQLite** via **Prisma** - zero setup, a single `dev.db` file
-- **Auth.js (NextAuth v5)** - email/password (credentials) auth, JWT sessions
-- **Claude API** (`@anthropic-ai/sdk`, model `claude-opus-5`) - the script/scene
-  generation step
-- **OpenAI TTS** (optional) - real AI voiceovers; the app still works end-to-end
-  without it, just with silent (caption-only) scenes
-- **ffmpeg** (via the bundled `ffmpeg-static` / `ffprobe-static` binaries - no
-  system install required) - assembles gradient backgrounds, burned-in captions
-  (via libass/ASS subtitles), voiceover audio, and concatenation into the final MP4
-- **Stripe** (test mode) - a Pro subscription tier via Checkout + a customer portal
-
-## Setup
+## Local setup
 
 ### 1. Install dependencies
 
 ```bash
+cd webapp
 npm install
 ```
 
@@ -48,31 +54,33 @@ npm install
 cp .env.example .env
 ```
 
-Then fill in `.env`:
+Edit `.env`:
 
 | Variable | Required | Notes |
-|---|---|---|
-| `DATABASE_URL` | Yes | Defaults to `file:./dev.db` - works out of the box. |
-| `AUTH_SECRET` | Yes | Random 32-byte secret. Generate with `openssl rand -base64 32`. |
-| `NEXTAUTH_URL` | Yes (local) | `http://localhost:3000` for local dev. |
-| `ANTHROPIC_API_KEY` | Yes, for script generation | Get one at [console.anthropic.com](https://console.anthropic.com). Without it, "Generate script" will return a clear error instead of crashing. |
-| `OPENAI_API_KEY` | No | Enables real AI voiceovers (`tts-1`). Without it, videos still render - just with captions and no narration. |
-| `STRIPE_SECRET_KEY` | No, for billing | Test-mode secret key (`sk_test_...`). |
-| `STRIPE_PUBLISHABLE_KEY` | No | Not currently used server-side, kept for completeness / future client-side Stripe.js use. |
-| `STRIPE_WEBHOOK_SECRET` | No, for billing | From `stripe listen` (see below) or your Stripe Dashboard webhook config. |
-| `STRIPE_PRO_PRICE_ID` | No, for billing | A test-mode recurring Price ID (`price_...`) for the Pro plan. |
-| `NEXT_PUBLIC_APP_URL` | Yes | Used to build Stripe redirect URLs. `http://localhost:3000` locally. |
-
-The app runs and the core loop works with just `ANTHROPIC_API_KEY` set - billing
-and voiceovers are additive.
+| --- | --- | --- |
+| `DATABASE_URL` | yes | Postgres connection string. Use a local Postgres, `docker run -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres`, or a free Neon/Vercel Postgres branch. |
+| `NEXTAUTH_SECRET` | yes | Any long random string. Generate with `openssl rand -hex 32`. |
+| `NEXTAUTH_URL` | yes | `http://localhost:3000` for local dev. |
+| `OPENAI_API_KEY` | yes | Needed for chat + embeddings. Get one at platform.openai.com. |
+| `OPENAI_CHAT_MODEL` | no | Defaults to `gpt-4o-mini`. |
+| `OPENAI_EMBEDDING_MODEL` | no | Defaults to `text-embedding-3-small`. |
+| `STRIPE_SECRET_KEY` | no (until you want billing) | Test-mode secret key (`sk_test_...`). |
+| `STRIPE_PUBLISHABLE_KEY` | no | Test-mode publishable key. |
+| `STRIPE_PRICE_ID_PRO` | no | The Price ID for your Pro plan product in test mode. |
+| `STRIPE_WEBHOOK_SECRET` | no | From `stripe listen` or your webhook endpoint config. |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | no | Used by the seed script to create the first admin account. |
+| `NEXT_PUBLIC_APP_URL` | yes | Public base URL, used to build widget embed snippets and Stripe redirect URLs. |
 
 ### 3. Set up the database
 
 ```bash
-npx prisma migrate dev
+npm run prisma:migrate   # applies the schema to DATABASE_URL
+npm run prisma:seed      # seeds the global system prompt + an admin account
 ```
 
-This creates `prisma/dev.db` (SQLite) and applies the schema.
+The seed script prints the admin login it created (defaults to
+`admin@example.com` / `admin12345` — override with `ADMIN_EMAIL` /
+`ADMIN_PASSWORD` in `.env` before seeding).
 
 ### 4. Run it
 
@@ -80,146 +88,91 @@ This creates `prisma/dev.db` (SQLite) and applies the schema.
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign up, drop an idea into
-the dashboard, generate a script, and render your first video.
+Visit `http://localhost:3000`:
 
-## Stripe test mode (optional, for the paid tier)
+- `/register` to create a normal account, then `/chat` to talk to the agent.
+- `/dashboard` to upload knowledge base sources and get your widget embed
+  snippet.
+- Log in as the seeded admin to see `/admin` (global system prompt editor +
+  every user's conversations).
+- `/pricing` to try the Stripe test-mode upgrade flow (requires Stripe env
+  vars — see below).
 
-1. Create a [Stripe](https://dashboard.stripe.com) account (test mode is on by
-   default for a new account).
-2. Create a recurring **Product + Price** (e.g. "Vid.ai Pro", $19/month) and copy
-   its Price ID into `STRIPE_PRO_PRICE_ID`.
-3. Copy your test **Secret key** into `STRIPE_SECRET_KEY`.
-4. For webhooks locally, install the [Stripe CLI](https://stripe.com/docs/stripe-cli)
-   and run:
+## Setting up Stripe (test mode)
+
+1. Create a [Stripe](https://dashboard.stripe.com) account and switch to
+   **test mode**.
+2. Create a Product with a recurring monthly Price (e.g. $49/mo) — copy its
+   Price ID into `STRIPE_PRICE_ID_PRO`.
+3. Copy your test **Secret key** and **Publishable key** into `.env`.
+4. For webhooks locally, run the Stripe CLI:
    ```bash
    stripe listen --forward-to localhost:3000/api/stripe/webhook
    ```
-   Copy the printed webhook signing secret into `STRIPE_WEBHOOK_SECRET`.
-5. Use Stripe's test card `4242 4242 4242 4242` (any future expiry, any CVC) to
-   complete checkout from the dashboard's "Upgrade to Pro" button.
+   Copy the printed `whsec_...` value into `STRIPE_WEBHOOK_SECRET`.
+5. Use Stripe's test card `4242 4242 4242 4242` (any future expiry/CVC) at
+   checkout. On success, the webhook flips the user's plan to `PRO` and
+   raises their daily message + source limits (see `lib/plans.js`).
 
-Without Stripe configured, the app still works fully on the free tier (3
-rendered videos/month per user) - the "Upgrade to Pro" button will just show a
-clear error instead of a real checkout.
+## Embedding the widget on another site
 
-## Why videos aren't served from `/public`
+After logging in, `/dashboard` shows a ready-to-paste snippet:
 
-Rendered MP4s are written to `storage/renders/` (gitignored) and streamed
-through `GET /api/videos/[id]` (with HTTP Range support for scrubbing/seeking,
-and an auth check so only the owner can fetch their video) rather than from
-Next's `public/` folder. This matters in production: `next start` snapshots the
-`public/` directory at process boot and will not serve files written there
-afterward - and this app writes new videos to disk continuously at runtime. The
-API-route approach sidesteps that entirely and adds an auth check for free.
-
-## Deploying
-
-The web app (Next.js + SQLite + Prisma) deploys to most Node hosts. The one
-constraint: **rendering needs a writable filesystem and the ability to spawn a
-bundled `ffmpeg` binary** - so a container/VM-style host is the simplest choice.
-Classic serverless platforms (e.g. Vercel's default runtime) work fine for
-everything *except* `POST /api/render`, which may need a Node-compatible
-serverless function with a larger bundle/time budget, or to be moved to a small
-background worker - that's a natural next step beyond this weekend MVP.
-
-### Option A: A VM / container host (Railway, Render, Fly.io, a plain VPS, etc.) - recommended
-
-1. Push this repo to GitHub.
-2. Create a new Node web service pointing at the repo.
-3. Build command: `npm install && npx prisma migrate deploy && npm run build`
-4. Start command: `npm run start`
-5. Set all the environment variables from `.env.example` (use your **production**
-   `NEXTAUTH_URL` / `NEXT_PUBLIC_APP_URL`, a fresh `AUTH_SECRET`, and switch Stripe
-   to live keys when you're ready to charge for real).
-6. Attach a persistent volume/disk mounted at the project root so `prisma/dev.db`
-   and `storage/renders/` survive restarts and deploys (SQLite + local file
-   storage are simple, but not distributed - fine for a single-instance MVP).
-7. Point your Stripe webhook endpoint at `https://<your-domain>/api/stripe/webhook`
-   and update `STRIPE_WEBHOOK_SECRET` accordingly.
-
-### Option B: Replit
-
-This repo includes `.replit` and `replit.nix` so it imports cleanly.
-
-1. In Replit: **Create App → Import from GitHub**, paste this repo's URL.
-2. Open the **Secrets** tool (padlock icon in the left sidebar) and add every
-   variable from `.env.example` - at minimum `DATABASE_URL` (`file:./dev.db`),
-   `AUTH_SECRET` (generate one, e.g. with `openssl rand -base64 32`), and
-   `ANTHROPIC_API_KEY`. Set `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` to your
-   Repl's public URL (shown at the top of the webview once it's running, e.g.
-   `https://<repl-name>.<your-username>.repl.co`), not `localhost`.
-3. Click **Run**. The configured run command builds, applies migrations, and
-   starts the app bound to `0.0.0.0` so Replit's proxy can reach it.
-4. **If a render fails with a `spawn ENOENT` or dynamic-linker error**: the
-   bundled `ffmpeg-static` binary can't always run in Replit's Nix sandbox.
-   `replit.nix` already installs a system `ffmpeg`/`ffprobe` as a fallback -
-   add these Secrets to use it instead of the bundled binary:
-   ```
-   FFMPEG_PATH=/nix/store/.../bin/ffmpeg    # run `which ffmpeg` in the Replit Shell to get the real path
-   FFPROBE_PATH=/nix/store/.../bin/ffprobe  # run `which ffprobe` in the Replit Shell to get the real path
-   ```
-5. **Persistence**: on a regular Repl (Autoscale-style always-on/Reserved VM),
-   the filesystem persists between runs, so `prisma/dev.db` and
-   `storage/renders/` survive restarts. If you use Replit's autoscale
-   *Deployments* (separate from the dev Repl, and can spin up fresh instances),
-   those don't guarantee persistent disk - move to a hosted Postgres and
-   object storage before relying on that deployment mode for real users.
-6. For billing, point your Stripe webhook at
-   `https://<your-repl-domain>/api/stripe/webhook`.
-
-### Option C: Vercel (app only, render step needs adjustment)
-
-Vercel deploys the Next.js app easily, but its default serverless functions
-have an ephemeral, size-limited filesystem that isn't a great fit for spawning
-`ffmpeg` and writing multi-megabyte files. If you deploy here:
-
-- Everything except rendering (auth, script generation, dashboard, billing)
-  works as-is.
-- For rendering, either enable a Fluid/longer-running function configuration
-  large enough for the bundled ffmpeg binaries, or move `renderProjectVideo()`
-  into a separate worker (a small queue + a Node process on a VM) and have
-  `/api/render` enqueue a job instead of rendering inline.
-- Swap SQLite for a hosted Postgres (e.g. Vercel Postgres / Neon) by changing
-  `provider` in `prisma/schema.prisma` and `DATABASE_URL` - SQLite's local file
-  won't persist across serverless invocations.
-
-## Project structure
-
-```
-src/
-  app/
-    page.tsx                 landing page
-    login/, signup/          auth pages
-    dashboard/                project list (search/filter, empty state, new-project form)
-    dashboard/[id]/           script + scenes + render + video player
-    api/
-      signup/                 create account
-      auth/[...nextauth]/     Auth.js handlers
-      projects/                create / delete project
-      generate/                Claude script generation
-      render/                  ffmpeg video assembly
-      videos/[id]/             authenticated, Range-aware video streaming
-      stripe/                  checkout / portal / webhook
-  lib/
-    generateScript.ts          Claude prompt + parsing
-    renderVideo.ts              the ffmpeg render pipeline
-    tts.ts                      optional OpenAI TTS voiceover
-    assSubtitle.ts               burned-in caption styling (ASS/libass)
-    ffmpegRunner.ts               spawn + probe helpers
-    limits.ts                    free-tier monthly video cap
-    auth.ts, prisma.ts, stripe.ts
-prisma/schema.prisma           User / Project / Scene models
-assets/fonts/                   bundled font used for burned-in captions
+```html
+<script src="https://your-domain.com/widget.js" data-key="YOUR_WIDGET_KEY" data-base="https://your-domain.com" async></script>
 ```
 
-## Notes & limitations (MVP scope)
+Drop it before `</body>` on any site. It renders a floating chat bubble
+backed by that account's knowledge base and system prompt, rate-limited by
+that account's plan.
 
-- Free tier: 3 rendered videos/month per user; Pro: unlimited. Enforced at
-  render time in `lib/limits.ts`.
-- Scene visuals are gradient cards, not AI-generated imagery/video - `visualPrompt`
-  is generated and stored per scene so swapping in an image/video generation
-  API later is a scoped, additive change.
-- Rendering is synchronous (the `/api/render` request blocks until the video is
-  done) - fine for a handful of short scenes; a real job queue is the natural
-  next step for longer videos or higher concurrency.
+## Architecture notes
+
+- **RAG**: documents are chunked (~1000 chars, 150 char overlap), embedded
+  with OpenAI embeddings, and stored as JSON vectors in a `Chunk` table in
+  Postgres. Retrieval does an in-process cosine-similarity search — no
+  vector database needed at this scale. If you outgrow that per-request
+  scan, swap `lib/embeddings.js`'s `retrieveContext` for a `pgvector` query
+  (or a hosted vector DB) — the rest of the app is unaffected.
+- **Streaming chat**: `/api/chat` streams the OpenAI completion as
+  Server-Sent Events over a plain `fetch` (no extra client library).
+- **Usage limits**: `lib/usage.js` tracks a per-user, per-day message
+  counter and enforces `lib/plans.js`'s `dailyMessageLimit` for both the
+  authenticated chat and the public widget endpoint.
+- **Auth**: NextAuth credentials provider + JWT sessions; passwords hashed
+  with bcrypt. `middleware.js` protects `/chat`, `/dashboard`, and `/admin`.
+
+## Deploying on Vercel
+
+The `build` script (`prisma migrate deploy && next build`) applies pending
+migrations automatically on every deploy, so there's no separate migration
+step.
+
+1. **Create a Postgres database.** In the Vercel dashboard: Project →
+   Storage → Create Database → Postgres (Neon-backed). This automatically
+   adds a `DATABASE_URL` (or `POSTGRES_URL` / `POSTGRES_PRISMA_URL`)
+   environment variable to the project — if Vercel names it something other
+   than `DATABASE_URL`, add a `DATABASE_URL` env var yourself pointing at the
+   same connection string (Prisma reads `DATABASE_URL` specifically).
+2. **Set the rest of the environment variables** under Project → Settings →
+   Environment Variables, for both "Production" and "Preview": every
+   variable in `.env.example` except `DATABASE_URL` (already set in step 1).
+   Set `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` to your Vercel deployment URL
+   (e.g. `https://your-project.vercel.app`).
+3. **Deploy.** Push to the connected Git branch (or trigger a deploy from
+   the dashboard) — the build runs migrations and builds the app.
+4. **Seed the admin account** once, from your machine, pointed at the
+   production database:
+   ```bash
+   DATABASE_URL="<production connection string>" ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=... npm run prisma:seed
+   ```
+   (or create a normal account through `/register` and flip its `role` to
+   `ADMIN` directly in the database).
+5. **Stripe webhook**: point a webhook endpoint at
+   `https://your-domain.com/api/stripe/webhook`, copy its signing secret into
+   `STRIPE_WEBHOOK_SECRET`, and switch to live-mode keys only when you're
+   ready to charge for real.
+
+Other hosts (Render, Railway, Fly.io, a VPS) work the same way — set the env
+vars, point `DATABASE_URL` at a reachable Postgres instance, and run
+`npm run build && npm start`.
