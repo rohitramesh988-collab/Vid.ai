@@ -138,7 +138,37 @@ background worker - that's a natural next step beyond this weekend MVP.
 7. Point your Stripe webhook endpoint at `https://<your-domain>/api/stripe/webhook`
    and update `STRIPE_WEBHOOK_SECRET` accordingly.
 
-### Option B: Vercel (app only, render step needs adjustment)
+### Option B: Replit
+
+This repo includes `.replit` and `replit.nix` so it imports cleanly.
+
+1. In Replit: **Create App → Import from GitHub**, paste this repo's URL.
+2. Open the **Secrets** tool (padlock icon in the left sidebar) and add every
+   variable from `.env.example` - at minimum `DATABASE_URL` (`file:./dev.db`),
+   `AUTH_SECRET` (generate one, e.g. with `openssl rand -base64 32`), and
+   `ANTHROPIC_API_KEY`. Set `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` to your
+   Repl's public URL (shown at the top of the webview once it's running, e.g.
+   `https://<repl-name>.<your-username>.repl.co`), not `localhost`.
+3. Click **Run**. The configured run command builds, applies migrations, and
+   starts the app bound to `0.0.0.0` so Replit's proxy can reach it.
+4. **If a render fails with a `spawn ENOENT` or dynamic-linker error**: the
+   bundled `ffmpeg-static` binary can't always run in Replit's Nix sandbox.
+   `replit.nix` already installs a system `ffmpeg`/`ffprobe` as a fallback -
+   add these Secrets to use it instead of the bundled binary:
+   ```
+   FFMPEG_PATH=/nix/store/.../bin/ffmpeg    # run `which ffmpeg` in the Replit Shell to get the real path
+   FFPROBE_PATH=/nix/store/.../bin/ffprobe  # run `which ffprobe` in the Replit Shell to get the real path
+   ```
+5. **Persistence**: on a regular Repl (Autoscale-style always-on/Reserved VM),
+   the filesystem persists between runs, so `prisma/dev.db` and
+   `storage/renders/` survive restarts. If you use Replit's autoscale
+   *Deployments* (separate from the dev Repl, and can spin up fresh instances),
+   those don't guarantee persistent disk - move to a hosted Postgres and
+   object storage before relying on that deployment mode for real users.
+6. For billing, point your Stripe webhook at
+   `https://<your-repl-domain>/api/stripe/webhook`.
+
+### Option C: Vercel (app only, render step needs adjustment)
 
 Vercel deploys the Next.js app easily, but its default serverless functions
 have an ephemeral, size-limited filesystem that isn't a great fit for spawning
