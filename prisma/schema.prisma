@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  passwordHash  String
+  plan          String    @default("free") // "free" | "pro"
+  stripeCustomerId     String?  @unique
+  stripeSubscriptionId String?  @unique
+  stripeCurrentPeriodEnd DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  projects Project[]
+}
+
+model Project {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  idea        String    // the original idea/prompt or pasted script
+  status      String    @default("draft") // draft | scripting | scripted | rendering | ready | failed
+  aspect      String    @default("9:16")  // 9:16 | 1:1 | 16:9
+  voice       String    @default("alloy") // TTS voice name
+  errorMessage String?
+
+  videoPath   String?
+  videoDuration Float?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  scenes      Scene[]
+
+  @@index([userId, createdAt])
+}
+
+model Scene {
+  id            String   @id @default(cuid())
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  order         Int
+  voiceoverText String
+  caption       String
+  visualPrompt  String
+  colorFrom     String   @default("#7c3aed")
+  colorTo       String   @default("#ec4899")
+  durationSec   Float?
+  audioPath     String?
+
+  createdAt     DateTime @default(now())
+
+  @@index([projectId, order])
+}
